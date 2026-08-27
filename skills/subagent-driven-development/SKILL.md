@@ -61,7 +61,7 @@ digraph process {
 
     "플랜 읽기, 컨텍스트·전역 제약 파악, todo 생성" [shape=box];
     "남은 task가 있는가?" [shape=diamond];
-    "최종 code reviewer subagent dispatch (../requesting-code-review/code-reviewer.md)" [shape=box];
+    "최종 code reviewer subagent dispatch (upstream requesting-code-review)" [shape=box];
     "finishing-a-development-branch 사용" [shape=box style=filled fillcolor=lightgreen];
 
     "플랜 읽기, 컨텍스트·전역 제약 파악, todo 생성" -> "implementer subagent dispatch (./implementer-prompt.md)";
@@ -76,8 +76,8 @@ digraph process {
     "task reviewer가 Spec ✅ + 품질 Approved 보고?" -> "todo 목록과 progress ledger에 task 완료 기록" [label="예"];
     "todo 목록과 progress ledger에 task 완료 기록" -> "남은 task가 있는가?";
     "남은 task가 있는가?" -> "implementer subagent dispatch (./implementer-prompt.md)" [label="예"];
-    "남은 task가 있는가?" -> "최종 code reviewer subagent dispatch (../requesting-code-review/code-reviewer.md)" [label="아니오"];
-    "최종 code reviewer subagent dispatch (../requesting-code-review/code-reviewer.md)" -> "finishing-a-development-branch 사용";
+    "남은 task가 있는가?" -> "최종 code reviewer subagent dispatch (upstream requesting-code-review)" [label="아니오"];
+    "최종 code reviewer subagent dispatch (upstream requesting-code-review)" -> "finishing-a-development-branch 사용";
 }
 ```
 
@@ -119,7 +119,7 @@ implementer·fixer는 Opus로 유지된다.
 
 implementer subagent는 네 가지 상태 중 하나를 보고한다. 각각 이렇게 처리한다:
 
-**DONE:** 리뷰 패키지를 생성하고(`scripts/review-package BASE HEAD`, 이 스킬
+**DONE:** 리뷰 패키지를 생성하고(`scripts/review-package PLAN_FILE BASE HEAD`, 이 스킬
 디렉토리에서 실행 — 작성한 고유 파일 경로를 출력한다; BASE는 implementer를
 dispatch하기 전에 기록해 둔 commit이다 — 절대 `HEAD~1`을 쓰지 말 것,
 multi-commit task에서 마지막 commit만 남기고 조용히 잘라먹는다), 출력된
@@ -173,7 +173,7 @@ task별 리뷰는 task 범위의 게이트다. 넓은 리뷰는 마지막의 브
   reviewer 템플릿에 이미 있다 — 제약 블록은 이 프로젝트의 스펙이 요구하는
   것을 담는 자리다.
 - reviewer에게 diff는 파일로 넘긴다: 이 스킬의
-  `scripts/review-package BASE HEAD`를 실행하고 출력된 파일 경로를 전달한다
+  `scripts/review-package PLAN_FILE BASE HEAD`를 실행하고 출력된 파일 경로를 전달한다
   (bash 없이는: `git log --oneline`, `git diff --stat`, 범위에 대한
   `git diff -U10`을 고유한 이름의 파일 하나로 리다이렉트). 출력물이 내
   컨텍스트에 들어오지 않고, reviewer는 Read 한 번으로 commit 목록, stat
@@ -195,7 +195,7 @@ task별 리뷰는 task 범위의 게이트다. 넓은 리뷰는 마지막의 브
   플랜이 요구한다는 이유로 발견을 기각하지 말고, 묻지도 않고 플랜과 모순되는
   수정을 dispatch하지도 마라.
 - 최종 브랜치 전체 리뷰에도 패키지를 준다:
-  `scripts/review-package MERGE_BASE HEAD`를 실행하고(MERGE_BASE = 브랜치가
+  `scripts/review-package PLAN_FILE MERGE_BASE HEAD`를 실행하고(MERGE_BASE = 브랜치가
   시작된 commit, 예: `git merge-base main HEAD`) 출력된 경로를 최종 리뷰
   dispatch에 포함한다. 최종 reviewer가 git 명령으로 브랜치 diff를 다시
   구하는 대신 파일 하나만 읽게 한다.
@@ -240,10 +240,11 @@ controller가 이미 완료한 task 시퀀스 전체를 재-dispatch한 적이 �
 것 중 가장 비싼 실패다. 진행 상황은 todo에만 두지 말고 ledger 파일에
 기록한다.
 
-- 스킬 시작 시 ledger를 확인한다:
-  `cat "$(git rev-parse --show-toplevel)/.superpowers/sdd/progress.md"`.
-  거기에 완료로 기록된 task는 DONE이다 — 재-dispatch하지 말고, 완료 표시가
-  없는 첫 task부터 재개한다.
+- 스킬 시작 시 `scripts/sdd-workspace PLAN_FILE`을 실행해 이 plan 전용 작업
+  디렉토리를 구한다. 그 안의 `progress.md`가 이 plan의 ledger다.
+- 이 plan의 ledger에 완료로 기록된 task는 DONE이다 — 재-dispatch하지 말고,
+  완료 표시가 없는 첫 task부터 재개한다. 다른 plan의 workspace나 예전의 평면
+  경로 `.superpowers/sdd/progress.md`는 현재 진행 상황으로 해석하지 않는다.
 - task의 리뷰가 깨끗하게 돌아오면, 다른 정리 작업과 같은 메시지에서 ledger에
   한 줄을 덧붙인다:
   `Task N: complete (commits <base7>..<head7>, review clean)`.
@@ -257,7 +258,7 @@ controller가 이미 완료한 task 시퀀스 전체를 재-dispatch한 적이 �
 
 - [implementer-prompt.md](implementer-prompt.md) - implementer subagent dispatch
 - [task-reviewer-prompt.md](task-reviewer-prompt.md) - task reviewer subagent dispatch (스펙 준수 + 코드 품질)
-- 최종 브랜치 전체 리뷰: requesting-code-review의 [code-reviewer.md](../requesting-code-review/code-reviewer.md) 사용
+- 최종 브랜치 전체 리뷰: upstream requesting-code-review의 [code-reviewer.md](https://github.com/obra/superpowers/blob/44c9b2d6e889982ac18c27d05a19fefe335194e1/skills/requesting-code-review/code-reviewer.md) 사용
 
 ## 예시 워크플로
 
@@ -344,9 +345,9 @@ Task reviewer: Spec ✅. Task quality: Approved.
 **품질 게이트:**
 - 셀프 리뷰가 핸드오프 전에 이슈를 잡음
 - task 리뷰는 두 개의 판정을 담음: 스펙 준수와 코드 품질
-- 리뷰 루프가 수정이 실제로 동작함을 보장
+- 리뷰 루프와 implementer의 테스트 증거가 수정 실패 가능성을 낮춤
 - 스펙 준수 검증이 과잉/과소 구현을 방지
-- 코드 품질 검증이 구현의 완성도를 보장
+- 코드 품질 검증이 구현의 완성도를 한 번 더 점검
 
 **비용:**
 - subagent 호출이 더 많음 (task당 implementer + reviewer)
@@ -375,7 +376,7 @@ Task reviewer: Spec ✅. Task quality: Approved.
   심각도를 미리 매김("최대 Minor로 취급") — 플랜의 예시 코드는 출발점이지 그
   약점이 의도된 선택이었다는 증거가 아니다
 - diff 파일 없이 task reviewer를 dispatch — 먼저 생성하고
-  (`scripts/review-package BASE HEAD`) 출력된 경로를 프롬프트에 명시할 것
+  (`scripts/review-package PLAN_FILE BASE HEAD`) 출력된 경로를 프롬프트에 명시할 것
 - 리뷰에 미해결 Critical/Important 이슈가 열려 있는데 다음 task로 이동
 - progress ledger가 이미 완료로 기록한 task를 재-dispatch — 컴팩션이나 재개
   후에는 ledger(그리고 `git log`)를 확인할 것

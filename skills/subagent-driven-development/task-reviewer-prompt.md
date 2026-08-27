@@ -161,7 +161,7 @@ Subagent (general-purpose):
 - `[BASE_SHA]` — 이 task 이전의 commit
 - `[HEAD_SHA]` — 현재 commit
 - `[DIFF_FILE]` — 필수: controller가 리뷰 패키지를 쓴 경로
-  (`scripts/review-package BASE HEAD`가 작성한 고유 경로를 출력한다; 패키지는
+  (`scripts/review-package PLAN_FILE BASE HEAD`가 작성한 고유 경로를 출력한다; 패키지는
   controller의 컨텍스트에 들어가지 않는다)
 
 **Reviewer가 돌려주는 것:** Spec Compliance 판정 (✅/❌/⚠️), Strengths, Issues

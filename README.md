@@ -1,91 +1,109 @@
 # AI와 일하는 방식
 
-제가 AI를 개발에 어떻게 쓰는지 보여주고 싶어서 만든 저장소예요. 말로 설명하면
-"Claude Code 씁니다" 이상을 전달하기가 어렵더라고요. 그래서 실제로 매일 쓰는
-워크플로우 파일과 설계 기록을 그대로 모아뒀어요. 여기 있는 스킬 파일들은 보여주려고
-새로 쓴 게 아니라, 지금도 제 개발 환경에서 돌아가는 원본의 스냅샷입니다.
+Claude Code를 단순한 코드 생성기가 아니라 설계, 구현, 리뷰, 인계가 이어지는
+개발 프로세스로 운영하기 위해 사용하는 스킬 모음입니다.
 
-요약하면 이래요. 저는 AI를 코드 자동완성이나 질문 상대로만 쓰지 않아요. spec 작성,
-구현, 리뷰, 인계처럼 사람이 하던 단계를 에이전트가 수행할 수 있는 형태로 정의해두고,
-저는 요구사항 결정이나 설계 승인, 리뷰 판정 같은 판단 지점에 집중합니다.
+이 저장소는 새로운 에이전트 프레임워크를 주장하지 않습니다. Jesse
+Vincent(obra)의 [superpowers](https://github.com/obra/superpowers)를 실제 작업에
+적용하면서 바꾼 규칙과, 사내 AI 코드리뷰 플랫폼을 운영하며 내린 설계 판단을
+공개 가능한 범위에서 정리한 포트폴리오입니다. 기준으로 삼은 upstream은
+[`44c9b2d`](https://github.com/obra/superpowers/tree/44c9b2d6e889982ac18c27d05a19fefe335194e1)입니다.
 
-## 스킬: 프로세스를 파일로 만들기
+## 한눈에 보는 흐름
 
-Claude Code에는 스킬이라는 확장 방식이 있어요. 특정 상황에서 에이전트가 따라야 할
-프로세스를 마크다운으로 정의해두면, 에이전트가 그 상황에서 파일을 읽고 그대로
-수행합니다. 저는 개발 사이클의 단계마다 스킬을 두고 쓰는데, [skills/](skills/)가
-그 원본이에요.
-
-**[brainstorming](skills/brainstorming/SKILL.md)** 은 구현 전에 아이디어를 spec으로
-다듬는 대화 프로세스예요. 핵심은 하드 게이트입니다. 설계를 제시하고 제가 승인하기
-전까지 에이전트는 코드를 한 줄도 못 써요. "단순해 보이니 바로 구현하자"는 판단을
-막으려고 넣었는데, 검증 안 된 가정이 가장 비싸게 먹히는 곳이 바로 단순해 보이는
-작업이더라고요. 질문은 한 번에 하나만 하게 했어요. 목업이나 다이어그램을 보여주는
-편이 나은 질문이 나오면 로컬 브라우저에 비교안을 띄우는 비주얼 컴패니언도 붙어
-있어요. 세션 토큰 인증과 포트 재사용까지 처리하는
-[작은 Node 서버](skills/brainstorming/scripts/server.cjs)가 스킬과 함께 움직입니다.
-
-**[writing-plans](skills/writing-plans/SKILL.md)** 는 확정된 spec을 구현 plan으로
-바꿔요. 전제가 하나 있어요. plan을 실행할 사람은 이 코드베이스를 전혀 모르고 취향도
-믿을 수 없는 엔지니어라고 가정합니다. 그래서 태스크마다 건드릴 파일, 코드, 테스트
-방법을 전부 적고, 스텝 하나는 2분에서 5분짜리 단일 액션으로 쪼개요. 이 가정이
-에이전트한테 정확히 들어맞아요. 에이전트는 매번 컨텍스트 없이 시작하는 유능한
-신입이거든요.
-
-**[subagent-driven-development](skills/subagent-driven-development/SKILL.md)** 는
-plan을 실행하는 오케스트레이션이에요. 태스크마다 격리된 컨텍스트의 implementer
-서브에이전트를 새로 띄우고, 구현이 끝나면 spec 준수와 코드 품질을 보는 리뷰어를
-붙이고, 마지막에 브랜치 전체를 다시 리뷰합니다. 태스크 사이에 사람 확인을 기다리지
-않고 끝까지 달리게 만들었어요. 대신 제 판단은 plan 승인과 최종 리뷰라는 두 관문에
-몰아넣었습니다.
-
-**[handoff](skills/handoff/SKILL.md)** 는 세션이 끝날 때 다음 에이전트를 위한 인계
-문서를 남겨요. 시도한 접근과 실패한 이유까지 적게 한 게 요점이에요. 성공한 경로만
-남기면 다음 에이전트가 같은 막다른 길을 다시 걷더라고요.
-
-네 스킬은 Jesse Vincent(obra)의 오픈소스
-[superpowers](https://github.com/obra/superpowers)를 바탕으로 제 작업 방식에 맞게
-고쳐 쓴 커스텀판이에요. 원본과 달라진 부분이 곧 제가 운영하면서 배운 것들입니다.
-worktree 격리를 기본에서 뺐고, 진행 중 확인 질문을 줄였고, 아래의 모델 정책을 스킬
-안에 넣었어요.
-
-## 모델은 역할로 배정해요
-
-서브에이전트를 많이 쓰면 모델 비용 구조가 바로 문제가 됩니다. 저는 태스크 난이도가
-아니라 역할로 모델 티어를 정해요.
-
-구현과 수정처럼 산출량이 많은 실행 역할은 워크호스 모델로 고정합니다. 리뷰어처럼
-판단 품질이 결과를 좌우하는 역할만 세션 모델을 상속받게 해요. 이러면 평소에는 전부
-워크호스로 저렴하게 돌다가, 중요한 리뷰를 플래그십 모델로 받고 싶을 때 세션 모델만
-바꾸면 리뷰어만 비싸져요. 구현체는 그대로 워크호스고요. 난이도를 태스크마다 추정해서
-모델을 고르는 방식도 써봤는데, 추정 자체가 자주 틀려서 역할 기반 고정으로
-정리했습니다. 구체적인 규칙은
-[subagent-driven-development의 모델 선택 절](skills/subagent-driven-development/SKILL.md)에
-있어요.
-
-## AI 코드리뷰 파이프라인 설계
-
-개인 워크플로우 밖에서는 사내 AI 코드리뷰 플랫폼을 설계하고 운영했어요. PR이 올라오면
-관점별 리뷰어 7종이 병렬로 리뷰하고, 독립 판정자가 지적의 유효성을 검증한 뒤, 수정
-에이전트가 코드에 반영하는 파이프라인입니다.
-
-프롬프트 원문은 회사 자산이라 싣지 못하는 대신, 설계하면서 내린 판단들을
-[docs/ai-code-review-pipeline.md](docs/ai-code-review-pipeline.md)에 정리했어요.
-오탐 한 건이 미탐 한 건보다 비싸다는 것, 생성과 검증을 분리하고 검증자의 정보를
-일부러 제한해야 한다는 것, PR 설명처럼 무해해 보이는 입력도 전부 프롬프트 주입
-벡터로 다뤄야 한다는 게 골자예요.
-
-## 저장소 안내
-
-```
-README.md                        이 문서
-docs/ai-code-review-pipeline.md  코드리뷰 파이프라인 설계 기록
-skills/brainstorming/            아이디어를 spec으로 다듬는 프로세스
-skills/writing-plans/            spec을 실행 가능한 plan으로 바꾸는 프로세스
-skills/subagent-driven-development/  plan을 서브에이전트로 실행하는 오케스트레이션
-skills/handoff/                  세션 간 작업 인계 문서 작성
+```text
+아이디어
+  → brainstorming: 질문과 대안 비교, 설계 승인
+  → writing-plans: 파일·인터페이스·테스트 단위로 구현 계획 작성
+  → subagent-driven-development: task별 구현과 리뷰 반복
+  → 최종 브랜치 리뷰
+  → handoff: 다음 세션에 결정과 실패 경로 인계
 ```
 
-스킬 파일은 특정 시점의 스냅샷이라 원본과 어긋날 수 있어요. 각 스킬 안의 프롬프트
-파일(implementer-prompt.md, task-reviewer-prompt.md 같은 것들)까지 읽으면
-에이전트한테 실제로 어떤 지시가 내려가는지 볼 수 있습니다.
+사람이 개입하는 지점은 요구사항 결정, 설계와 plan 승인, 최종 리뷰입니다. 승인된
+plan을 실행하는 동안에는 task마다 확인을 요청하지 않고, 막힘이나 plan 모순이
+발견됐을 때만 다시 판단을 요청합니다.
+
+## 제가 바꾼 운영 규칙
+
+| 영역 | 이 저장소의 선택 | 이유 |
+| --- | --- | --- |
+| 작업 공간 | worktree 대신 현재 workspace의 별도 브랜치 사용 | 작은 개인 프로젝트에서 생기는 전환 비용을 줄이기 위해 |
+| 실행 흐름 | task 사이의 확인 질문 제거 | 승인된 plan은 중간 대기 없이 끝까지 실행하기 위해 |
+| 모델 배정 | 난이도 추정 대신 실행/판단 역할로 tier 고정 | task별 난이도 예측의 편차를 없애고 비용을 통제하기 위해 |
+| 컨텍스트 전달 | task brief, 구현 보고, diff package를 파일로 전달 | 긴 dispatch와 대화 compaction으로 인한 정보 손실을 줄이기 위해 |
+| 진행 복구 | plan별 progress ledger 기록 | 세션이 끊겨도 완료 task를 중복 실행하지 않기 위해 |
+| 리뷰 | task마다 spec 준수와 코드 품질을 함께 판정 | 과소 구현과 과잉 구현을 코드 품질 문제와 동시에 잡기 위해 |
+
+구체적인 upstream 대비 파일 구분은
+[upstream-and-customizations.md](docs/upstream-and-customizations.md)에 적었습니다.
+
+## 들어 있는 것
+
+- [brainstorming](skills/brainstorming/SKILL.md): 구현 전에 요구사항과 설계를
+  검증합니다. 시각적 비교가 필요한 경우에만 로컬 브라우저 companion을 사용합니다.
+- [writing-plans](skills/writing-plans/SKILL.md): 확정된 spec을 독립적으로 실행
+  가능한 task와 테스트 단계로 변환합니다.
+- [subagent-driven-development](skills/subagent-driven-development/SKILL.md): task별
+  implementer와 reviewer를 분리하고 파일 기반으로 컨텍스트를 전달합니다.
+- [handoff](skills/handoff/SKILL.md): 성공한 경로뿐 아니라 실패한 접근과 다음
+  행동까지 `HANDOFF.md`에 남깁니다.
+- [AI 코드리뷰 파이프라인 설계](docs/ai-code-review-pipeline.md): 사내 플랫폼에서
+  리뷰어 분리, 오탐 판정, 재리뷰 중복 억제를 설계한 이유를 정리합니다.
+
+## 설치와 전제
+
+이 저장소는 완결된 Claude Code plugin이 아니라 개인 환경에서 사용하는 스킬의
+스냅샷입니다. Claude Code는 개인 스킬을 `~/.claude/skills/<name>/SKILL.md`, 프로젝트
+스킬을 `.claude/skills/<name>/SKILL.md`에서 읽습니다.
+
+개인 환경에 설치하는 예시는 다음과 같습니다.
+
+```bash
+git clone https://github.com/cyhcyh100/ai-driven-workflow.git
+cd ai-driven-workflow
+mkdir -p ~/.claude/skills
+cp -R skills/brainstorming skills/writing-plans \
+  skills/subagent-driven-development skills/handoff ~/.claude/skills/
+```
+
+필요한 실행 환경은 Git, Bash, Node.js 18 이상입니다. 전체 개발 흐름에는 이
+저장소에 포함하지 않은 upstream 스킬도 필요합니다.
+
+- `test-driven-development`
+- `requesting-code-review`
+- `finishing-a-development-branch`
+- `executing-plans`를 대안 실행기로 사용할 경우 해당 스킬
+
+누락된 의존성은 같은 기준 commit의
+[superpowers skills](https://github.com/obra/superpowers/tree/44c9b2d6e889982ac18c27d05a19fefe335194e1/skills)에서
+확인할 수 있습니다.
+
+## 검증
+
+```bash
+scripts/verify.sh
+```
+
+검증 스크립트는 다음을 확인합니다.
+
+- Bash와 Node.js 문법
+- plan별 SDD workspace와 ledger 격리
+- task brief와 review package 생성
+- brainstorming server의 WebSocket helper
+- Markdown 내부 링크
+
+## 공개 범위와 한계
+
+- 사내 AI 코드리뷰 플랫폼의 프롬프트와 구현은 회사 자산이라 공개하지 않습니다.
+  문서에는 재사용 가능한 설계 판단만 담았습니다.
+- 회사 데이터로 측정한 오탐률이나 비용 수치는 공개하지 않았습니다. 따라서 이
+  저장소는 성능 benchmark가 아니라 운영 방식과 판단 근거를 보여주는 자료입니다.
+- 모델 이름과 사용 가능 tier는 실행 환경에 종속됩니다. 모델 정책의 핵심은 특정
+  제품명이 아니라 실행 역할과 판단 역할을 분리하는 데 있습니다.
+
+## 라이선스와 출처
+
+upstream에서 가져온 부분과 수정한 부분 모두 루트 [LICENSE](LICENSE)의 MIT
+라이선스를 따릅니다. 원본 저작권과 파일별 출처는
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)에 기록했습니다.

@@ -47,6 +47,7 @@ MIT 라이선스는 루트 `LICENSE`에 보존합니다.
 
 - `skills/handoff/SKILL.md`
 - `docs/ai-code-review-pipeline.md`
+- `docs/how-i-work.md`
 - 저장소의 README, 검증 스크립트와 테스트
 
 `docs/ai-code-review-pipeline.md`는 사내 구현을 복제한 것이 아니라, 공개 가능한
